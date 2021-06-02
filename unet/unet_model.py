@@ -59,8 +59,8 @@ class CustomUNet(pl.LightningModule):
         self.outc = OutConv(self.filters, self.num_classes)
         self.output_activation = nn.Sigmoid()
 
-        self.down_list = []
-        self.up_list = []
+        self.down_list = nn.ModuleList()
+        self.up_list = nn.ModuleList()
 
         factor = 2
         in_channels = self.filters
