@@ -3,7 +3,7 @@
 import torch.nn.functional as F
 
 from .unet_parts import *
-from typing import *
+import pytorch_lightning as pl
 
 
 class UNet(nn.Module):
@@ -39,7 +39,7 @@ class UNet(nn.Module):
         return logits
 
 
-class CustomUNet(nn.Module):
+class CustomUNet(pl.LightningModule):
     def __init__(
             self,
             num_channels: int = 1,
@@ -48,7 +48,7 @@ class CustomUNet(nn.Module):
             num_layers: int = 4,
             bilinear: bool = False,
     ):
-        super(CustomUNet, self).__init__()
+        super().__init__()
         self.num_channels = num_channels
         self.num_classes = num_classes
         self.bilinear = bilinear
@@ -87,6 +87,19 @@ class CustomUNet(nn.Module):
             x = up(x, emb)
         logits = self.outc(x)
         return logits
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        emb, emb_list = self.conv(x)
+        logits = self.deconv(emb, emb_list)
+        y_hat = self.output_activation(logits)
+        loss = F.mse_loss(y_hat, y)
+        self.log('train_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer
 
     def forward(self, x):
         emb, emb_list = self.conv(x)
