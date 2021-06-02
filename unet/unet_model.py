@@ -44,15 +44,8 @@ class CustomUNet(nn.Module):
             self,
             num_channels: int = 1,
             num_classes: int = 1,
-            activation: str = 'relu',
-            use_batch_norm: bool = True,
-            dropout: float = .3,
-            dropout_change_per_layer: float = .3,
-            dropout_type: str = 'spatial',
-            use_attention: bool = False,
             filters: int = 16,
             num_layers: int = 4,
-            output_activation: str = 'sigmoid',
             bilinear: bool = False,
     ):
         super(CustomUNet, self).__init__()
@@ -64,6 +57,7 @@ class CustomUNet(nn.Module):
 
         self.inc = DoubleConv(self.num_channels, self.filters)
         self.outc = OutConv(self.filters, self.num_classes)
+        self.output_activation = nn.Sigmoid()
 
         self.down_list = []
         self.up_list = []
@@ -71,17 +65,31 @@ class CustomUNet(nn.Module):
         factor = 2
         in_channels = self.filters
         for i in range(self.num_layers):
-            self.down_list.append(Down(in_channels, in_channels * factor))
-            self.up_list.append(Up(in_channels * factor, in_channels))
+            down = Down(in_channels, in_channels * factor)
+            up = Up(in_channels * factor, in_channels, self.bilinear)
+
+            self.down_list.append(down)
+            self.up_list.append(up)
             in_channels *= factor
         self.up_list = self.up_list[::-1]
 
-    def forward(self, x):
+    def conv(self, x):
+        emb_list = []
         x = self.inc(x)
         for down in self.down_list:
+            emb_list.append(x)
             x = down(x)
-        for up in self.up_list:
-            x = up(x)
+        emb_list = emb_list[::-1]
+        return x, emb_list
 
+    def deconv(self, x, emb_list):
+        for up, emb in zip(self.up_list, emb_list):
+            x = up(x, emb)
         logits = self.outc(x)
         return logits
+
+    def forward(self, x):
+        emb, emb_list = self.conv(x)
+        logits = self.deconv(emb, emb_list)
+        pred = self.output_activation(logits)
+        return pred
