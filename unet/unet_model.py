@@ -39,24 +39,6 @@ class UNet(nn.Module):
         return logits
 
 
-def custom_unet(
-    input_shape,
-    num_classes=1,
-    activation="relu",
-    use_batch_norm=True,
-    upsample_mode="deconv",  # 'deconv' or 'simple'
-    dropout=0.3,
-    dropout_change_per_layer=0.0,
-    dropout_type="spatial",
-    use_dropout_on_upsampling=False,
-    use_attention=False,
-    filters=16,
-    num_layers=4,
-    output_activation="sigmoid",
-):  # 'sigmoid' or 'softmax'
-    pass
-
-
 class CustomUNet(nn.Module):
     def __init__(
             self,
@@ -71,7 +53,7 @@ class CustomUNet(nn.Module):
             filters: int = 16,
             num_layers: int = 4,
             output_activation: str = 'sigmoid',
-            bilinear: bool = True,
+            bilinear: bool = False,
     ):
         super(CustomUNet, self).__init__()
         self.num_channels = num_channels
@@ -92,28 +74,14 @@ class CustomUNet(nn.Module):
             self.down_list.append(Down(in_channels, in_channels * factor))
             self.up_list.append(Up(in_channels * factor, in_channels))
             in_channels *= factor
-
-        self.down1 = Down(64, 128)
-        self.down2 = Down(128, 256)
-        self.down3 = Down(256, 512)
-        factor = 2 if bilinear else 1
-        self.down4 = Down(512, 1024 // factor)
-        self.up1 = Up(1024, 512 // factor, bilinear)
-        self.up2 = Up(512, 256 // factor, bilinear)
-        self.up3 = Up(256, 128 // factor, bilinear)
-        self.up4 = Up(128, 64, bilinear)
-
-
+        self.up_list = self.up_list[::-1]
 
     def forward(self, x):
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
+        x = self.inc(x)
+        for down in self.down_list:
+            x = down(x)
+        for up in self.up_list:
+            x = up(x)
+
         logits = self.outc(x)
         return logits
